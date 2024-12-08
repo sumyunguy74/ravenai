@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1e1e2f;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #9c27b0;
+        }
+        form {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        input[type="text"] {
+            padding: 10px;
+            width: 100%;
+            border: 1px solid #555;
+            border-radius: 5px;
+            background-color: #2e2e3f;
+            color: #e0e0e0;
+        }
+        button {
+            padding: 12px 24px;
+            background-color: #673ab7;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #512da8;
+        }
+        #generatedImage {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #555;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+        #loading {
+            display: none;
+            color: #9c27b0;
+            margin-top: 20px;
+        }
+        #error {
+            display: none;
+            color: #ff5252;
+            margin-top: 20px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+            padding-top: 60px;
+        }
+        .modal-content {
+            background-color: #2e2e3f;
+            color: #e0e0e0;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #555;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 10px;
+        }
+        .close {
+            color: #e0e0e0;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #673ab7;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            margin-right: 5px;
+        }
+        button:hover {
+            background-color: #7e57c2;
+        }
+        .image-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .image-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .image-item img {
+            max-width: 100px;
+            margin-right: 10px;
+        }
+        .library {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .folder {
+            background-color: #3e3e4f;
+            color: #e0e0e0;
+            width: 150px;
+            height: 150px;
+            margin: 10px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .folder:hover {
+            background-color: #5e5e7f;
+        }
+        .folder.dragover {
+            background-color: #7e7e9f;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Image Generator</h1>
+    <form id="generateForm">
+        <div class="input-group">
+            <label for="prompt">Enter a prompt:</label>
+            <input type="text" id="prompt" name="prompt" required 
+                   placeholder="Describe what you want to generate..." value="Beautiful Radiant Fire Female Fire Nymph">
+        </div>
+        <div class="input-group">
+            <label for="negative-prompt">Negative Prompt:</label>
+            <input type="text" id="negative-prompt" placeholder="Type here...">
+        </div>
+        <button type="submit">Generate Image</button>
+    </form>
+    
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <form id="uploadForm">
+                <div class="input-group">
+                    <label for="file">Select File:</label>
+                    <input type="file" id="file" name="file" required>
+                </div>
+                <div class="input-group">
+                    <label for="label">Label:</label>
+                    <input type="text" id="label" name="label">
+                </div>
+                <button type="submit">Upload</button>
+            </form>
+            <div class="image-container" id="imageContainer">
+                <!-- Images will be dynamically added here -->
+            </div>
+            <div class="library" id="library">
+                <div class="folder" data-label="Category1">Category 1</div>
+                <div class="folder" data-label="Category2">Category 2</div>
+                <div class="folder" data-label="Category3">Category 3</div>
+                <!-- Add more folders as needed -->
+            </div>
+            <button id="trainButton">Train Model</button>
+        </div>
+    </div>
+    
+    <div id="loading">Generating image... Please wait...</div>
+    <div id="error"></div>
+    <img id="generatedImage" alt="Generated Image">
+
+    <script>
+        var modal = document.getElementById("myModal");
+        var span = document.getElementsByClassName("close")[0];
+
+        // Function to handle Enter key press
+        function handleEnterKeyPress(event, callback) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                callback();
+            }
+        }
+
+        // Update secret code activation
+        document.getElementById('negative-prompt').addEventListener('keypress', function(e) {
+            handleEnterKeyPress(e, function() {
+                if (e.target.value === 'LEXUS' && document.getElementById('prompt').value.trim() === '') {
+                    modal.style.display = "block";
+                }
+            });
+        });
+
+        // Add Enter key handling to other text boxes
+        document.querySelectorAll('input[type="text"]').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                handleEnterKeyPress(e, function() {
+                    console.log('Enter pressed in:', e.target.id);
+                    // Add specific actions for each text box if needed
+                });
+            });
+        });
+
+        span.onclick = function() {
+            modal.style.display = "none";
+        }
+
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        // Modify upload form to not require label
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            fetch('http://localhost:5000/upload', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json()).then(data => {
+                if (data.success) {
+                    addImageToContainer(formData.get('file'), formData.get('label') || '');
+                } else {
+                    console.error('Upload failed:', data.error);
+                }
+            }).catch(error => console.error('Error:', error));
+        });
+
+        function addImageToContainer(file, label) {
+            const container = document.getElementById('imageContainer');
+            const imageItem = document.createElement('div');
+            imageItem.className = 'image-item';
+
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            imageItem.appendChild(img);
+
+            const labelText = document.createElement('span');
+            labelText.textContent = label;
+            imageItem.appendChild(labelText);
+
+            const editButton = document.createElement('button');
+            editButton.textContent = 'Edit';
+            editButton.onclick = function() {
+                // Edit functionality here
+            };
+            imageItem.appendChild(editButton);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Delete';
+            deleteButton.onclick = function() {
+                container.removeChild(imageItem);
+            };
+            imageItem.appendChild(deleteButton);
+
+            container.appendChild(imageItem);
+        }
+
+        document.getElementById('trainButton').addEventListener('click', function() {
+            startTraining();
+        });
+
+        function startTraining() {
+            fetch('/train', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'Training started') {
+                        const interval = setInterval(() => {
+                            fetch('/progress')
+                                .then(response => response.json())
+                                .then(data => {
+                                    document.getElementById('progress-value').textContent = data.progress;
+                                    if (data.progress >= 100) {
+                                        clearInterval(interval);
+                                    }
+                                });
+                        }, 1000);
+                    }
+                });
+        }
+
+        document.getElementById('generateForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            const prompt = document.getElementById('prompt').value;
+            const negativePrompt = document.getElementById('negative-prompt').value;
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const imageElement = document.getElementById('generatedImage');
+            
+            // Reset state
+            loadingDiv.style.display = 'block';
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            imageElement.style.display = 'none';
+            
+            try {
+                console.log('Sending request to generate image...');
+                const response = await fetch('http://localhost:8000/generate-fill', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        prompt: prompt,
+                        negative_prompt: negativePrompt 
+                    })
+                });
+
+                console.log('Response received:', response.status);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Response data:', data);
+                    
+                    if (data.image) {
+                        const imageUrl = `http://localhost:8000${data.image}`;
+                        console.log('Loading image from:', imageUrl);
+                        
+                        // Create a new image element to force reload
+                        const newImage = new Image();
+                        newImage.onload = function() {
+                            imageElement.src = imageUrl;
+                            imageElement.style.display = 'block';
+                        };
+                        newImage.onerror = function() {
+                            throw new Error('Failed to load the generated image');
+                        };
+                        newImage.src = imageUrl;
+                    } else {
+                        throw new Error('No image data received');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate image');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                errorDiv.textContent = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        });
+
+        const folders = document.querySelectorAll('.folder');
+        const imageItems = document.querySelectorAll('.image-item');
+
+        imageItems.forEach(item => {
+            item.draggable = true;
+            item.addEventListener('dragstart', dragStart);
+        });
+
+        folders.forEach(folder => {
+            folder.addEventListener('dragover', dragOver);
+            folder.addEventListener('drop', drop);
+        });
+
+        function dragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.id);
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            const id = e.dataTransfer.getData('text/plain');
+            const draggableElement = document.getElementById(id);
+            const label = e.currentTarget.getAttribute('data-label');
+            // Update the label of the image
+            draggableElement.querySelector('span').textContent = label;
+            e.currentTarget.classList.remove('dragover');
+            // Optionally, send a request to the server to update the label
+            // fetch('/update-label', { method: 'POST', body: JSON.stringify({ id, label }) })
+        }
+    </script>
+</body>
+</html>
